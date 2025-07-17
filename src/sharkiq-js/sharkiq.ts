@@ -4,6 +4,7 @@ import type { AylaApi } from './ayla_api.js'
 
 import { Buffer, transcode } from 'node:buffer'
 
+import { safeJsonParse } from '../utils.js'
 import { global_vars } from './const.js'
 import { OperatingModes, PowerModes, Properties } from './properties.js'
 
@@ -187,7 +188,20 @@ class SharkIqVacuum {
         const auth_header = await this.ayla_api.auth_header()
         const resp = await this.ayla_api.makeRequest('GET', `${url}?${params.toString()}`, null, auth_header)
         try {
-          const properties = JSON.parse(resp.response)
+          // Log raw response for debugging
+          this.log.debug(`Raw API Response: ${resp.response}`)
+          this.log.debug(`Response Status: ${resp.status}`)
+          this.log.debug(`Response OK: ${resp.ok}`)
+
+          // Use safe JSON parsing utility
+          const parseResult = safeJsonParse(resp.response)
+          if (!parseResult.success) {
+            this.log.warn(`Error parsing JSON response for properties: ${property_list.join(', ')}`)
+            this.log.debug(`Parse Error: ${parseResult.error}`)
+            return ERROR_DELAY
+          }
+
+          const properties = parseResult.data
           if (resp.status === 429) {
             this.log.debug('API Error: Too many requests')
             this.log.debug('Waiting an extra 30 seconds before retrying...')
@@ -208,15 +222,29 @@ class SharkIqVacuum {
             return 0
           }
         } catch (e) {
-          this.log.warn(`Error parsing JSON response for properties: ${property_list.join(', ')}`)
+          this.log.warn(`Error processing API response for properties: ${property_list.join(', ')}`)
           this.log.debug(`Error Message: ${e}`)
+          this.log.debug(`Raw Response: ${resp.response}`)
           return ERROR_DELAY
         }
       } else {
         const auth_header = await this.ayla_api.auth_header()
         const resp = await this.ayla_api.makeRequest('GET', url, null, auth_header)
-        const properties = JSON.parse(resp.response)
         try {
+          // Log raw response for debugging
+          this.log.debug(`Raw API Response (full update): ${resp.response}`)
+          this.log.debug(`Response Status: ${resp.status}`)
+          this.log.debug(`Response OK: ${resp.ok}`)
+
+          // Use safe JSON parsing utility
+          const parseResult = safeJsonParse(resp.response)
+          if (!parseResult.success) {
+            this.log.warn('Error parsing JSON response for full property update')
+            this.log.debug(`Parse Error: ${parseResult.error}`)
+            return ERROR_DELAY
+          }
+
+          const properties = parseResult.data
           if (resp.status === 429) {
             this.log.debug('API Error: Too many requests')
             this.log.debug('Waiting an extra 30 seconds before retrying...')
@@ -236,8 +264,10 @@ class SharkIqVacuum {
             this._do_update(full_update, properties)
             return 0
           }
-        } catch {
-          this.log.warn('Error parsing JSON response for properties.')
+        } catch (e) {
+          this.log.warn('Error processing API response for properties.')
+          this.log.debug(`Error Message: ${e}`)
+          this.log.debug(`Raw Response: ${resp.response}`)
           return ERROR_DELAY
         }
       }
