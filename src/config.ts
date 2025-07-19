@@ -4,14 +4,18 @@ import crypto from 'node:crypto'
 import { promises as fs } from 'node:fs'
 
 import { global_vars } from './sharkiq-js/const.js'
+import { safeJsonParse } from './utils.js'
 
 export async function getAuthData(authFilePath: string): Promise<AuthData> {
   try {
     const data = await fs.readFile(authFilePath, 'utf8')
-    const authData = JSON.parse(data)
-    return authData
+    const parseResult = safeJsonParse(data)
+    if (!parseResult.success) {
+      return Promise.reject(new Error(`Error parsing auth data JSON: ${parseResult.error}`))
+    }
+    return parseResult.data
   } catch (error) {
-    return Promise.reject(new Error(`Error reading OAuth data: ${error}`))
+    return Promise.reject(new Error(`Error reading auth data file: ${error}`))
   }
 }
 
@@ -93,10 +97,13 @@ export async function setAuthData(authFilePath: string, data: AuthData): Promise
 export async function getOAuthData(oAuthFilePath: string): Promise<OAuthData> {
   try {
     const data = await fs.readFile(oAuthFilePath, 'utf8')
-    const oAuthData = JSON.parse(data)
-    return oAuthData
+    const parseResult = safeJsonParse(data)
+    if (!parseResult.success) {
+      return Promise.reject(new Error(`Error parsing OAuth data JSON: ${parseResult.error}`))
+    }
+    return parseResult.data
   } catch (error) {
-    return Promise.reject(new Error(`Error reading OAuth data: ${error}`))
+    return Promise.reject(new Error(`Error reading OAuth data file: ${error}`))
   }
 }
 
